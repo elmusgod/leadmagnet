@@ -7,6 +7,7 @@ import { KyselyModule } from 'nestjs-kysely';
 import { join } from 'path';
 import { AgentModule } from './modules/agent/agent.module';
 import { CallLogModule } from './modules/call-log/call-log.module';
+import { LeadModule } from './modules/lead/lead.module';
 import { SystemConfigModule } from './modules/system-config/system-config.module';
 import { promises } from 'fs';
 import { FileMigrationProvider, Migrator } from 'kysely';
@@ -32,6 +33,7 @@ import * as path from 'path';
 
     CallLogModule,
     AgentModule,
+    LeadModule,
     SystemConfigModule,
   ],
   providers: [

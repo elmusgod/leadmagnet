@@ -8,6 +8,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/elements/select';
+import LeadImport from './components/fragments/lead-import';
 import {
     createColumnHelper,
     getCoreRowModel,
@@ -485,6 +486,8 @@ export default function RealtimeConsole() {
                             </form>
                         </Card>
 
+                        <LeadImport agents={agents as Array<{ id: number; name: string }>} />
+                        
                         <Card className="p-4 my-2 mr-2">
                             <h3 className="text-lg font-medium text-gray-700">
                                 Agent Prompt

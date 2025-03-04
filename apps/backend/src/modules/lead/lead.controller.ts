@@ -7,6 +7,7 @@ import {
   UploadedFile,
   ParseIntPipe,
   Get,
+  Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -18,6 +19,25 @@ import * as fs from 'fs';
 @Controller('lead')
 export class LeadController {
   constructor(private readonly leadService: LeadService) {}
+
+  @Get()
+  async findAll(@Query('agent_id') agentId?: string): Promise<Lead[]> {
+    console.log('Finding all leads, agent filter:', agentId);
+    return this.leadService.findAll(agentId ? { agent_id: parseInt(agentId) } : {});
+  }
+
+  @Get(':id')
+  async findOne(@Param('id', ParseIntPipe) id: number): Promise<Lead> {
+    console.log(`Finding lead with ID: ${id}`);
+    return this.leadService.findOne(id);
+  }
+
+  @Get(':id/summary')
+  async generateSummary(@Param('id', ParseIntPipe) id: number): Promise<{ summary: string }> {
+    console.log(`Generating summary for lead with ID: ${id}`);
+    const summary = await this.leadService.generateSummary(id);
+    return { summary };
+  }
 
   @Get('test-create/:agentId')
   async testCreateLead(@Param('agentId', ParseIntPipe) agentId: number): Promise<Lead> {

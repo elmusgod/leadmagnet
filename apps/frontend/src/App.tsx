@@ -9,6 +9,7 @@ import {
     SelectValue,
 } from '@/components/elements/select';
 import LeadImport from './components/fragments/lead-import';
+import LeadList from './components/fragments/lead-list';
 import {
     createColumnHelper,
     getCoreRowModel,
@@ -53,6 +54,7 @@ export default function RealtimeConsole() {
     const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
     const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
     const [promptValue, setPromptValue] = useState('');
+    const [activeTab, setActiveTab] = useState<'calls' | 'leads'>('calls');
 
     const {
         data: callLogsResponse,
@@ -406,27 +408,81 @@ export default function RealtimeConsole() {
                 </div>
             </header>
 
-            <main className="flex-grow ">
+            <main className="flex-grow">
                 <div className="flex gap-2">
-                    {/* Left: DataGrid */}
-                    <div className="flex-1 max-w-[100vw-320px] overflow-x-scroll">
-                        {callLogsIsLoading ? (
-                            <div className="flex items-center justify-center h-full">
-                                <div className="text-sm font-medium text-gray-600">
-                                    Loading...
+                    {/* Left: DataGrid or LeadList */}
+                    <div className="flex-1 max-w-[100vw-320px] overflow-hidden">
+                        <div className="flex border-b mb-4">
+                            <button
+                                className={`px-4 py-2 font-medium ${
+                                    activeTab === 'calls'
+                                        ? 'text-blue-600 border-b-2 border-blue-600'
+                                        : 'text-gray-500 hover:text-gray-700'
+                                }`}
+                                onClick={() => setActiveTab('calls')}
+                            >
+                                Appels
+                            </button>
+                            <button
+                                className={`px-4 py-2 font-medium ${
+                                    activeTab === 'leads'
+                                        ? 'text-blue-600 border-b-2 border-blue-600'
+                                        : 'text-gray-500 hover:text-gray-700'
+                                }`}
+                                onClick={() => setActiveTab('leads')}
+                            >
+                                Leads
+                            </button>
+                        </div>
+
+                        {activeTab === 'calls' ? (
+                            callLogsIsLoading ? (
+                                <div className="flex items-center justify-center h-full">
+                                    <div className="text-sm font-medium text-gray-600">
+                                        Loading...
+                                    </div>
                                 </div>
-                            </div>
-                        ) : callLogsError ? (
-                            <div className="flex items-center justify-center h-full">
-                                <div className="text-sm font-medium text-red-600">
-                                    Error: {callLogsError.message}
+                            ) : callLogsError ? (
+                                <div className="flex items-center justify-center h-full">
+                                    <div className="text-sm font-medium text-red-600">
+                                        Error: {callLogsError.message}
+                                    </div>
                                 </div>
-                            </div>
+                            ) : (
+                                <DataGrid
+                                    table={table}
+                                    freezeColumns={1}
+                                    onCellEdit={() => {}}
+                                />
+                            )
                         ) : (
-                            <DataGrid
-                                table={table}
-                                freezeColumns={1}
-                                onCellEdit={() => {}}
+                            <LeadList 
+                                agents={agents as Array<{ id: number; name: string }>}
+                                onAddToPrompt={(_, summary) => {
+                                    // Find the current prompt value
+                                    const currentPrompt = promptValue || '';
+                                    
+                                    // Add the lead summary to the end of the prompt
+                                    const updatedPrompt = currentPrompt + 
+                                        (currentPrompt ? '\n\n' : '') + 
+                                        `Informations sur le bien:\n${summary}`;
+                                    
+                                    // Update the prompt value
+                                    setPromptValue(updatedPrompt);
+                                    
+                                    // If an agent is selected, scroll to the agent prompt section
+                                    if (selectedAgentId) {
+                                        const agentPromptSection = document.getElementById('agent-form');
+                                        if (agentPromptSection) {
+                                            agentPromptSection.scrollIntoView({ behavior: 'smooth' });
+                                        }
+                                    } else {
+                                        // If no agent is selected, select the first one
+                                        if (agents.length > 0) {
+                                            setSelectedAgentId(`${agents[0].id}`);
+                                        }
+                                    }
+                                }}
                             />
                         )}
                     </div>

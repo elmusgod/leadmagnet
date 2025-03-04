@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { BaseCrudService } from '../../common/services/base-crud.service';
 import { Lead, Database } from '@/type/database';
 import { Kysely } from 'kysely';
@@ -10,6 +10,100 @@ import * as fs from 'fs';
 export class LeadService extends BaseCrudService<Lead> {
   constructor(@InjectKysely() readonly db: Kysely<Database>) {
     super(db, 'lead');
+  }
+
+  /**
+   * Find all leads with optional filtering
+   * @param filter Optional filter criteria
+   * @returns Array of leads
+   */
+  async findAll(filter: any = {}): Promise<Lead[]> {
+    console.log('Finding leads with filter:', filter);
+    
+    let query = this.db.selectFrom('lead').selectAll();
+    
+    // Apply agent_id filter if provided
+    if (filter.agent_id) {
+      query = query.where('agent_id', '=', filter.agent_id);
+    }
+    
+    // Order by most recent first
+    query = query.orderBy('created_at', 'desc');
+    
+    return await query.execute();
+  }
+
+  /**
+   * Find a lead by ID
+   * @param id Lead ID
+   * @returns Lead object
+   */
+  async findOne(id: number): Promise<Lead> {
+    console.log(`Finding lead with ID: ${id}`);
+    
+    const lead = await this.db
+      .selectFrom('lead')
+      .selectAll()
+      .where('id', '=', id)
+      .executeTakeFirst();
+    
+    if (!lead) {
+      throw new NotFoundException(`Lead with ID ${id} not found`);
+    }
+    
+    return lead;
+  }
+
+  /**
+   * Generate a summary for a lead
+   * @param id Lead ID
+   * @returns Generated summary text
+   */
+  async generateSummary(id: number): Promise<string> {
+    console.log(`Generating summary for lead with ID: ${id}`);
+    
+    // Get the lead data
+    const lead = await this.findOne(id);
+    
+    if (!lead) {
+      throw new NotFoundException(`Lead with ID ${id} not found`);
+    }
+    
+    // Extract the most important information for the summary
+    const propertyType = lead.type || 'Propriété';
+    const location = [lead.street_number, lead.street, lead.zip_code, lead.city]
+      .filter(Boolean)
+      .join(' ');
+    const price = lead.price ? `${lead.price}€` : 'Prix non spécifié';
+    const surface = lead.surface ? `${lead.surface}m²` : 'Surface non spécifiée';
+    const rooms = lead.room_count ? `${lead.room_count} pièces` : '';
+    
+    // Create features list
+    const features = [];
+    if (lead.terrace) features.push('terrasse');
+    if (lead.balcony) features.push('balcon');
+    if (lead.cellar) features.push('cave');
+    if (lead.parking) features.push('parking');
+    if (lead.swimming_pool) features.push('piscine');
+    
+    // Generate the summary
+    let summary = `${propertyType} à ${lead.city || 'vendre'}, ${surface}${rooms ? ', ' + rooms : ''}. `;
+    summary += `Située ${location}. `;
+    summary += `Prix: ${price}. `;
+    
+    if (features.length > 0) {
+      summary += `Caractéristiques: ${features.join(', ')}. `;
+    }
+    
+    if (lead.description) {
+      // Add a shortened version of the description if available
+      const shortDescription = lead.description.length > 150 
+        ? lead.description.substring(0, 150) + '...' 
+        : lead.description;
+      summary += `Description: ${shortDescription}`;
+    }
+    
+    return summary;
   }
 
   /**

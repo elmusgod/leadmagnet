@@ -2,21 +2,14 @@ import { useState } from 'react';
 import { Button } from '@/components/elements/button';
 import { Label } from '@/components/elements/label';
 import { Card } from '@/components/elements/card';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/elements/select';
 import { useImportLeadsFromExcel } from '@/services/lead';
 
 interface LeadImportProps {
-  agents: Array<{ id: number; name: string }>;
+  // We keep the interface for backward compatibility
+  agents?: Array<{ id: number; name: string }>;
 }
 
-export default function LeadImport({ agents }: LeadImportProps) {
-  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+export default function LeadImport(_props: LeadImportProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [importStats, setImportStats] = useState<{ count: number } | null>(null);
 
@@ -35,13 +28,14 @@ export default function LeadImport({ agents }: LeadImportProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedFile || !selectedAgentId) return;
+    if (!selectedFile) return;
 
     const formData = new FormData();
     formData.append('file', selectedFile);
 
+    // Use a default agent ID of 1 since we no longer need to select an agent during import
     importLeads(
-      { agentId: parseInt(selectedAgentId), formData },
+      { agentId: 1, formData },
       {
         onSuccess: (data) => {
           setImportStats({ count: data.data.count });
@@ -56,34 +50,18 @@ export default function LeadImport({ agents }: LeadImportProps) {
 
   return (
     <Card className="p-4 my-2 mr-2">
-      <h3 className="text-lg font-medium text-gray-700">Import Leads</h3>
+      <h3 className="text-lg font-medium text-gray-700">Import des Leads</h3>
+      <div className="mb-4 text-sm text-gray-600">
+        <p>Format attendu du fichier Excel :</p>
+        <ul className="list-disc pl-5 mt-2">
+          <li>Colonne 1 : Numéro de téléphone</li>
+          <li>Colonne 2 : Informations sur le bien</li>
+        </ul>
+      </div>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <Label className="text-xs" htmlFor="agent-select">
-            Select Agent
-          </Label>
-          <Select
-            required
-            value={selectedAgentId || ''}
-            onValueChange={(value) => setSelectedAgentId(value)}
-            name="agent-select"
-          >
-            <SelectTrigger id="agent-select">
-              <SelectValue placeholder="Select an agent" />
-            </SelectTrigger>
-            <SelectContent>
-              {agents.map((agent) => (
-                <SelectItem key={agent.id} value={`${agent.id}`}>
-                  {`${agent.id} - ${agent.name}`}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div>
           <Label className="text-xs" htmlFor="excel-file">
-            Excel File
+            Fichier Excel
           </Label>
           <input
             id="excel-file"
@@ -96,23 +74,23 @@ export default function LeadImport({ agents }: LeadImportProps) {
         </div>
 
         <Button
-          disabled={isPending || !selectedFile || !selectedAgentId}
+          disabled={isPending || !selectedFile}
           variant="secondary"
           type="submit"
           className="w-full"
         >
-          {isPending ? 'Importing...' : 'Import Leads'}
+          {isPending ? 'Importation...' : 'Importer les Leads'}
         </Button>
 
         {error && (
           <div className="text-sm text-red-500">
-            Error: {(error as Error).message}
+            Erreur : {(error as Error).message}
           </div>
         )}
 
         {isSuccess && importStats && (
           <div className="text-sm text-green-500">
-            Successfully imported {importStats.count} leads!
+            {importStats.count} leads importés avec succès !
           </div>
         )}
       </form>

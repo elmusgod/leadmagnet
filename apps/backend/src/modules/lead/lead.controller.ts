@@ -1,13 +1,14 @@
 import {
   Controller,
   Post,
-  Body,
   Param,
   UseInterceptors,
   UploadedFile,
   ParseIntPipe,
   Get,
-  Query,
+  Put,
+  Delete,
+  Body,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -21,9 +22,9 @@ export class LeadController {
   constructor(private readonly leadService: LeadService) {}
 
   @Get()
-  async findAll(@Query('agent_id') agentId?: string): Promise<Lead[]> {
-    console.log('Finding all leads, agent filter:', agentId);
-    return this.leadService.findAll(agentId ? { agent_id: parseInt(agentId) } : {});
+  async findAll(): Promise<Lead[]> {
+    console.log('Finding all leads');
+    return this.leadService.findAll();
   }
 
   @Get(':id')
@@ -39,30 +40,20 @@ export class LeadController {
     return { summary };
   }
 
-  @Get('test-create/:agentId')
-  async testCreateLead(@Param('agentId', ParseIntPipe) agentId: number): Promise<Lead> {
-    console.log(`Testing lead creation for agent ID: ${agentId}`);
-    
-    // Create a test lead with minimal data
-    const testLead = {
-      agent_id: agentId,
-      source: 'Test API',
-      type: 'Test',
-      price: '100000',
-      phone_number: '1234567890',
-      statut: 'new'
-    };
-    
-    console.log('Creating test lead:', testLead);
-    
-    try {
-      const createdLead = await this.leadService.create(testLead);
-      console.log('Test lead created successfully:', createdLead);
-      return createdLead;
-    } catch (error) {
-      console.error('Error creating test lead:', error);
-      throw error;
-    }
+  @Put(':id/status')
+  async updateStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { status: string }
+  ): Promise<Lead> {
+    console.log(`Updating status for lead with ID: ${id} to ${body.status}`);
+    return this.leadService.update(id, { status: body.status });
+  }
+
+  @Delete(':id')
+  async deleteLead(@Param('id', ParseIntPipe) id: number): Promise<{ success: boolean }> {
+    console.log(`Deleting lead with ID: ${id}`);
+    await this.leadService.remove(id);
+    return { success: true };
   }
 
   @Post('import-excel/:agentId')

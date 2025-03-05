@@ -22,11 +22,6 @@ export class LeadService extends BaseCrudService<Lead> {
     
     let query = this.db.selectFrom('lead').selectAll();
     
-    // Apply agent_id filter if provided
-    if (filter.agent_id) {
-      query = query.where('agent_id', '=', filter.agent_id);
-    }
-    
     // Order by most recent first
     query = query.orderBy('created_at', 'desc');
     
@@ -69,59 +64,26 @@ export class LeadService extends BaseCrudService<Lead> {
       throw new NotFoundException(`Lead with ID ${id} not found`);
     }
     
-    // Extract the most important information for the summary
-    const propertyType = lead.type || 'Propriété';
-    const location = [lead.street_number, lead.street, lead.zip_code, lead.city]
-      .filter(Boolean)
-      .join(' ');
-    const price = lead.price ? `${lead.price}€` : 'Prix non spécifié';
-    const surface = lead.surface ? `${lead.surface}m²` : 'Surface non spécifiée';
-    const rooms = lead.room_count ? `${lead.room_count} pièces` : '';
-    
-    // Create features list
-    const features = [];
-    if (lead.terrace) features.push('terrasse');
-    if (lead.balcony) features.push('balcon');
-    if (lead.cellar) features.push('cave');
-    if (lead.parking) features.push('parking');
-    if (lead.swimming_pool) features.push('piscine');
-    
-    // Generate the summary
-    let summary = `${propertyType} à ${lead.city || 'vendre'}, ${surface}${rooms ? ', ' + rooms : ''}. `;
-    summary += `Située ${location}. `;
-    summary += `Prix: ${price}. `;
-    
-    if (features.length > 0) {
-      summary += `Caractéristiques: ${features.join(', ')}. `;
-    }
-    
-    if (lead.description) {
-      // Add a shortened version of the description if available
-      const shortDescription = lead.description.length > 150 
-        ? lead.description.substring(0, 150) + '...' 
-        : lead.description;
-      summary += `Description: ${shortDescription}`;
-    }
-    
-    return summary;
+    // The property_info already contains all the information we need
+    return lead.property_info;
   }
 
   /**
    * Import leads from Excel file
    * @param filePath Path to the Excel file
-   * @param agentId ID of the agent to assign leads to
+   * @param agentId ID of the agent to assign leads to (not used in the new structure but kept for compatibility)
    * @returns Array of created leads
    */
   async importFromExcel(filePath: string, agentId: number): Promise<Lead[]> {
     try {
-      console.log(`Starting import from Excel file: ${filePath} for agent ID: ${agentId}`);
+      console.log(`Starting import from Excel file: ${filePath}`);
       
       // Check if file exists
       if (!fs.existsSync(filePath)) {
         throw new Error(`File not found: ${filePath}`);
       }
       
-      // Read the Excel file with more robust error handling
+      // Read the Excel file
       console.log('Reading Excel file...');
       let workbook;
       try {
@@ -140,40 +102,15 @@ export class LeadService extends BaseCrudService<Lead> {
       
       const worksheet = workbook.Sheets[sheetName];
       
-      // Convert to JSON with more robust error handling
+      // Convert to JSON with array format (header: 1)
       console.log('Converting to JSON...');
       let data;
       try {
-        // Try different approaches to read the Excel file
-        console.log('Trying sheet_to_json with default options...');
         data = XLSX.utils.sheet_to_json(worksheet, { 
           defval: null,
-          raw: true
+          raw: true,
+          header: 1
         });
-        
-        if (!data || data.length === 0) {
-          console.log('No data found with default options, trying with header:1...');
-          data = XLSX.utils.sheet_to_json(worksheet, { 
-            defval: null,
-            raw: true,
-            header: 1
-          });
-          
-          if (data && data.length > 1) {
-            // Convert array format to object format
-            const headers = data[0];
-            console.log('Headers found:', headers);
-            data = data.slice(1).map(row => {
-              const obj = {};
-              headers.forEach((header, i) => {
-                if (header) {
-                  obj[header] = row[i] === undefined ? null : row[i];
-                }
-              });
-              return obj;
-            });
-          }
-        }
       } catch (jsonError) {
         console.error('Error converting Excel to JSON:', jsonError);
         throw new Error(`Failed to convert Excel to JSON: ${jsonError.message}`);
@@ -185,79 +122,43 @@ export class LeadService extends BaseCrudService<Lead> {
         throw new Error('Excel file has no data rows');
       }
       
-      // Log all rows to see the structure
-      console.log('All rows:');
-      data.forEach((row, index) => {
-        console.log(`Row ${index}:`, JSON.stringify(row));
-      });
-      
-      // Define problematic columns that need special handling
-      const complexColumns = ['IMAGES', 'IRIS_IDS', 'ADS'];
-      
-      // Map Excel data to lead objects with more robust error handling
+      // Map Excel data to lead objects with the new simplified structure
       console.log('Mapping Excel data to lead objects...');
       const leads = [];
       
-      // Define essential columns to keep
-      const essentialColumns = [
-        'source', 'type', 'surface', 'price', 'phone_number', 
-        'description', 'city', 'zip_code', 'street', 'street_number'
-      ];
+      // Skip the header row if it exists
+      const startIndex = data[0][0] && typeof data[0][0] === 'string' ? 1 : 0;
       
-      for (let index = 0; index < data.length; index++) {
+      for (let index = startIndex; index < data.length; index++) {
         try {
           const row = data[index];
           
           // Skip empty rows
-          if (!row || Object.keys(row).length === 0) {
+          if (!row || row.length === 0) {
             console.log(`Skipping empty row at index ${index}`);
             continue;
           }
           
-          // Create a simplified lead object with only essential columns
-          const simplifiedLead: Record<string, any> = {
-            agent_id: agentId,
-            statut: 'new', // Default status for new leads
-            phone_number: null // Initialize phone_number
+          // Get phone number from first column
+          const phoneNumber = row[0] ? String(row[0]).trim() : '';
+          
+          // Get property info from second column
+          const propertyInfo = row[1] ? String(row[1]).trim() : '';
+          
+          // Skip rows without phone number or property info
+          if (!phoneNumber || !propertyInfo) {
+            console.log(`Skipping row ${index} due to missing phone number or property info`);
+            continue;
+          }
+          
+          // Create a lead object with the new structure
+          const lead = {
+            phone_number: phoneNumber,
+            property_info: propertyInfo,
+            status: 'new' // Default status for new leads
           };
           
-          // Process only essential columns
-          for (const key of Object.keys(row)) {
-            if (key) {
-              // Convert key to lowercase
-              const normalizedKey = key.toLowerCase().replace(/ +/g, '_');
-              
-              // Check if this is an essential column
-              const matchingEssentialColumn = essentialColumns.find(col => 
-                normalizedKey === col || 
-                normalizedKey.includes(col) || 
-                col.includes(normalizedKey)
-              );
-              
-              if (matchingEssentialColumn) {
-                // For essential columns, convert to appropriate type
-                if (row[key] === null || row[key] === undefined) {
-                  simplifiedLead[matchingEssentialColumn] = null;
-                } else if (matchingEssentialColumn === 'price' || matchingEssentialColumn === 'surface') {
-                  // Convert to number if possible
-                  const numValue = parseFloat(row[key]);
-                  simplifiedLead[matchingEssentialColumn] = isNaN(numValue) ? String(row[key]) : numValue;
-                } else {
-                  // Convert to string for other columns
-                  simplifiedLead[matchingEssentialColumn] = String(row[key]);
-                }
-              }
-            }
-          }
-          
-          // Add phone_number if it exists in the row
-          if (row.phone_number) {
-            simplifiedLead.phone_number = String(row.phone_number);
-          } else if (row.PHONE_NUMBER) {
-            simplifiedLead.phone_number = String(row.PHONE_NUMBER);
-          }
-          
-          leads.push(simplifiedLead);
+          leads.push(lead);
         } catch (rowError) {
           console.error(`Error processing row ${index}:`, rowError);
           console.error('Row data:', JSON.stringify(data[index]));
@@ -270,7 +171,7 @@ export class LeadService extends BaseCrudService<Lead> {
         throw new Error('No valid leads found in Excel file');
       }
       
-      // Create leads in database with more robust error handling
+      // Create leads in database
       console.log(`Inserting ${leads.length} leads into database...`);
       const createdLeads = [];
       
@@ -284,9 +185,6 @@ export class LeadService extends BaseCrudService<Lead> {
         } catch (dbError) {
           console.error(`Error inserting lead ${i+1}:`, dbError);
           console.error('Error details:', dbError.message);
-          if (dbError.stack) {
-            console.error('Stack trace:', dbError.stack);
-          }
           // Continue with other leads
         }
       }
@@ -297,20 +195,12 @@ export class LeadService extends BaseCrudService<Lead> {
         fs.unlinkSync(filePath);
       } catch (unlinkError) {
         console.error('Error cleaning up temporary file:', unlinkError);
-        // Don't throw an error here, just log it
       }
       
       console.log(`Successfully imported ${createdLeads.length} leads out of ${leads.length}`);
       return createdLeads;
     } catch (error) {
       console.error('Error importing leads from Excel:', error);
-      // Log more details about the error
-      if (error.stack) {
-        console.error('Stack trace:', error.stack);
-      }
-      if (error.code) {
-        console.error('Error code:', error.code);
-      }
       
       // Try to clean up the file if it exists
       try {

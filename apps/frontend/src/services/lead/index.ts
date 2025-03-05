@@ -15,56 +15,9 @@ interface ImportLeadsResponse {
 
 export interface Lead {
   id: number;
-  agent_id: number;
-  source: string | null;
-  type: string | null;
-  sub_type: string | null;
-  surface: string | null;
-  surface_carrez: string | null;
-  room_count: string | null;
-  floor_count: string | null;
-  construction_year: string | null;
-  new_build: boolean | null;
-  marketing_type: string | null;
-  price: string | null;
-  price_hc: string | null;
-  price_cc: string | null;
-  selling_price: string | null;
-  dealers: string | null;
-  marketing_start_date: string | null;
-  marketing_end_date: string | null;
-  publication_start_date: string | null;
-  publication_end_date: string | null;
-  rental_expenses: string | null;
-  rental_expenses_included: boolean | null;
-  fees: string | null;
-  fees_included: boolean | null;
-  iris_ids: string | null;
-  street_number: string | null;
-  street: string | null;
-  zip_code: string | null;
-  city: string | null;
-  lat: string | null;
-  lon: string | null;
-  description: string | null;
-  images: string | null;
-  ads: string | null;
-  phone_number: string | null;
-  floor_level: string | null;
-  land: boolean | null;
-  surface_land: string | null;
-  terrace: boolean | null;
-  balcony: boolean | null;
-  cellar: boolean | null;
-  parking: boolean | null;
-  swimming_pool: boolean | null;
-  general_state: string | null;
-  dpe_letter: string | null;
-  dpe: string | null;
-  ges_letter: string | null;
-  ges: string | null;
-  diagnosis_date: string | null;
-  statut: string;
+  phone_number: string;
+  property_info: string;
+  status: string;
   created_at: string;
   updated_at: string;
   summary?: string;
@@ -119,6 +72,28 @@ export const useGenerateLeadSummary = () => {
   });
 };
 
+// Hook to update lead status
+export const useUpdateLeadStatus = () => {
+  return useMutation({
+    mutationFn: async ({ leadId, status }: { leadId: number; status: string }) => {
+      const response = await api.put<Lead>(`lead/${leadId}/status`, { status });
+      return response.data;
+    },
+    onSuccess: (updatedLead) => {
+      // Update the lead cache with the new status
+      queryClient.setQueryData(['lead', updatedLead.id], updatedLead);
+      
+      // Also update the lead in the leads list cache
+      queryClient.setQueriesData({ queryKey: ['leads'] }, (oldData: any) => {
+        if (!oldData) return oldData;
+        return oldData.map((lead: Lead) => 
+          lead.id === updatedLead.id ? updatedLead : lead
+        );
+      });
+    },
+  });
+};
+
 export const useImportLeadsFromExcel = () => {
   return useMutation({
     mutationFn: ({ agentId, formData }: ImportLeadsParams) => 
@@ -131,6 +106,17 @@ export const useImportLeadsFromExcel = () => {
       // Invalidate any queries that might be affected by this import
       queryClient.invalidateQueries({ queryKey: ['lead'] });
       queryClient.invalidateQueries({ queryKey: ['agent'] });
+    },
+  });
+};
+
+// Hook to delete a lead
+export const useDeleteLead = () => {
+  return useMutation({
+    mutationFn: (leadId: number) => api.delete(`lead/${leadId}`),
+    onSuccess: () => {
+      // Invalidate lead queries to refresh the list
+      queryClient.invalidateQueries({ queryKey: ['lead'] });
     },
   });
 };

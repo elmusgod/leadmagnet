@@ -147,7 +147,7 @@ try {
   
   // Clean up the inserted leads
   console.log('Cleaning up test leads...');
-  db.exec('DELETE FROM lead WHERE status = "new";');
+  db.exec("DELETE FROM lead WHERE status = 'new';");
   
   console.log('Test completed successfully');
 } catch (error) {
